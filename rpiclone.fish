@@ -125,11 +125,11 @@ Notes:
     end
 
     # Unmount anything just in case
-    umount /dev/${src}* /dev/${dst}* >/dev/null 2>&1
+    umount /dev/{$src}* /dev/{$dst}* >/dev/null 2>&1
 
     # Get partition sizes
-    set -l src_size (lsblk -bno SIZE /dev/${src}2)
-    set -l dst_size (lsblk -bno SIZE /dev/${dst})
+    set -l src_size (lsblk -bno SIZE /dev/{$src}2)
+    set -l dst_size (lsblk -bno SIZE /dev/{$dst})
 
     if test $src_size -gt $dst_size
         echo "Source root partition is larger than destination disk."
@@ -152,7 +152,7 @@ Notes:
         echo "Creating temporary filesystem image..."
         set -l tmp_image /tmp/rpiclone-rootfs.img
         mkdir -p /tmp/rpiclone-staging
-        mount /dev/${src}2 /tmp/rpiclone-staging -o ro
+        mount /dev/{$src}2 /tmp/rpiclone-staging -o ro
 
         set -l root_used (du -s --block-size=1 /tmp/rpiclone-staging | awk '{print $1}')
         set -l root_target (math "$root_used + (1024 * 1024 * 512)") # Add 512MB buffer
@@ -184,15 +184,15 @@ Notes:
 
     # Clone boot partition
     echo "Cloning boot partition..."
-    partclone.vfat -s /dev/${src}1 -o /dev/${dst}1
+    partclone.vfat -s /dev/{$src}1 -o /dev/{$dst}1
 
     # Clone root partition
     if test -e /tmp/rpiclone-rootfs.img
         echo "Writing temporary shrunken root filesystem to destination..."
-        dd if=/tmp/rpiclone-rootfs.img of=/dev/${dst}2 bs=4M status=progress conv=fsync
+        dd if=/tmp/rpiclone-rootfs.img of=/dev/{$dst}2 bs=4M status=progress conv=fsync
     else
         echo "Cloning root partition normally..."
-        partclone.ext4 -s /dev/${src}2 -o /dev/${dst}2
+        partclone.ext4 -s /dev/{$src}2 -o /dev/{$dst}2
     end
 
     # Expand partition
@@ -202,7 +202,7 @@ Notes:
     sleep 2
 
     echo "Resizing ext4 filesystem on root partition..."
-    resize2fs /dev/${dst}2
+    resize2fs /dev/{$dst}2
 
     # Cleanup
     rm -f /tmp/rpiclone-rootfs.img
