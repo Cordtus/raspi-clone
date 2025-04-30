@@ -1,7 +1,7 @@
-function rpiclone --description 'Simple and reliable Raspberry Pi OS disk cloner with SSH fix'
+function rpiclone --description 'Simple Pi system (whole drive) disk cloning tool'
     # HELP
     if contains -- "--help" $argv; or contains -- "-h" $argv
-        echo "rpiclone - Simple and reliable Raspberry Pi SD card cloner"
+        echo "rpiclone - Simple Raspberry Pi SD card cloner"
         echo ""
         echo "USAGE:"
         echo "  rpiclone                # Show available devices"
@@ -29,7 +29,7 @@ function rpiclone --description 'Simple and reliable Raspberry Pi OS disk cloner
         set -l flags $argv[3..-1]
         
         if test -z "$dst"
-            echo "Need both source and destination"
+            echo "Cloning reuqires source and destination devices"
             return 1
         end
         
@@ -38,7 +38,7 @@ function rpiclone --description 'Simple and reliable Raspberry Pi OS disk cloner
             for f in $flags
                 set cmd "$cmd $f"
             end
-            echo "Restarting with sudo..."
+            echo "Retrying with sudo..."
             sudo fish -c "source $HOME/.config/fish/functions/rpiclone.fish; $cmd"
             return $status
         end
@@ -50,7 +50,7 @@ function rpiclone --description 'Simple and reliable Raspberry Pi OS disk cloner
             end
         end
 
-        echo "=== SIMPLE DIRECT CLONING WITH SSH FIX ==="
+        echo "=== SIMPLE DIRECT CLONING ==="
         # Check if destination exists
         if not test -b $dst
             echo "ERROR: Destination device $dst not found"
@@ -59,7 +59,7 @@ function rpiclone --description 'Simple and reliable Raspberry Pi OS disk cloner
         
         # Verify source has Raspberry Pi partitions
         if not test -b $src"1"; or not test -b $src"2"
-            echo "ERROR: Source doesn't have standard Raspberry Pi partitions"
+            echo "ERROR: Source device has a non-standard partition layout"
             return 1
         end
         
@@ -106,16 +106,16 @@ function rpiclone --description 'Simple and reliable Raspberry Pi OS disk cloner
         wipefs -a $dst
         
         # 2. Create partition table
-        echo "Creating new partition table..."
+        echo "Creating partition table..."
         parted --script $dst mklabel msdos
         
         # 3. Create boot partition (100MB buffer)
         set -l boot_mb_size (echo "$src_boot_mb + 100" | bc)
-        echo "Creating boot partition of $boot_mb_size MB..."
+        echo "Creating boot partition: $boot_mb_size MB..."
         parted --script $dst mkpart primary fat32 1MiB "$boot_mb_size"MiB
         
         # 4. Create root partition (fills rest of device)
-        echo "Creating root partition to fill device..."
+        echo "Creating root partition with all remaining space..."
         parted --script $dst mkpart primary ext4 "$boot_mb_size"MiB 100%
         
         # 5. Set boot flag
@@ -182,18 +182,18 @@ function rpiclone --description 'Simple and reliable Raspberry Pi OS disk cloner
         echo "New fstab contents:"
         cat "$dst_root/etc/fstab"
         
-        # 14. Fix SSH Configuration (CRITICAL)
-        echo "Setting up SSH properly..."
+        # 14. Configure SSH
+        echo "Enabling SSH..."
         
-        # 14.1 Enable SSH via boot flag
+        # 14.1 Enable via boot flag
         echo "Adding ssh file to boot partition..."
         touch "$dst_boot/ssh"
         
-        # 14.2 Ensure SSH is enabled in systemd
+        # 14.2 Verify enabled
         echo "Enabling SSH service..."
         mkdir -p "$dst_root/etc/systemd/system/multi-user.target.wants"
         
-        # Link the SSH service if it exists
+        # Link SSH service if exists
         if test -f "$dst_root/lib/systemd/system/ssh.service"
             # Create symlink if it doesn't exist
             if not test -L "$dst_root/etc/systemd/system/multi-user.target.wants/ssh.service"
@@ -201,7 +201,7 @@ function rpiclone --description 'Simple and reliable Raspberry Pi OS disk cloner
             end
         end
         
-        # Also check for sshd.service (some distros use this)
+        # Check for sshd.service
         if test -f "$dst_root/lib/systemd/system/sshd.service"
             # Create symlink if it doesn't exist
             if not test -L "$dst_root/etc/systemd/system/multi-user.target.wants/sshd.service"
@@ -209,7 +209,7 @@ function rpiclone --description 'Simple and reliable Raspberry Pi OS disk cloner
             end
         end
         
-        # 14.3 Configure SSH to start properly
+        # 14.3 Start on boot
         echo "Configuring sshd_config..."
         if test -f "$dst_root/etc/ssh/sshd_config"
             # Make key additions to sshd_config
@@ -223,11 +223,11 @@ function rpiclone --description 'Simple and reliable Raspberry Pi OS disk cloner
             echo "PasswordAuthentication yes" >> "$dst_root/etc/ssh/sshd_config"
         end
         
-        # 14.4 Remove old host keys so new ones will be generated on first boot
+        # 14.4 Remove host keys so new ones are generated on first boot
         echo "Removing old SSH host keys..."
         rm -f "$dst_root/etc/ssh/ssh_host_"*
         
-        # 14.5 Create marker to regenerate SSH keys on first boot
+        # 14.5 Marker to generate SSH keys at boot
         mkdir -p "$dst_root/etc/ssh/sshd_config.d"
         echo "Creating SSH key generation script..."
         echo '#!/bin/sh' > "$dst_root/etc/rc.local"
